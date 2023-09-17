@@ -40,7 +40,7 @@ class DDIM:
         new_t = self.timestep_map[t]
         return new_t
 
-    def ddim_sample(self, denoise_fn, x_t, t, condition):
+    def ddim_sample(self, denoise_fn, x_t, t, condition=None):
         shape = x_t.shape
         predicted_noise = denoise_fn(x_t, self.t_transform(t), condition)
         predicted_x_0 = self.extract_coef_at_t(self.sqrt_recip_alphas_cumprod, t, shape) * x_t - \
@@ -54,7 +54,7 @@ class DDIM:
 
         return predicted_x_0 * torch.sqrt(alpha_bar_prev) + torch.sqrt(1. - alpha_bar_prev) * new_predicted_noise
 
-    def ddim_sample_loop(self, denoise_fn, x_T, condition):
+    def ddim_sample_loop(self, denoise_fn, x_T, condition=None):
         shape = x_T.shape
         batch_size = shape[0]
         img = x_T
@@ -63,7 +63,7 @@ class DDIM:
             img = self.ddim_sample(denoise_fn, img, t, condition)
         return img
 
-    # def ddim_encode(self, denoise_fn, x_t, t, condition):
+    # def ddim_encode(self, denoise_fn, x_t, t, condition=None):
     #     shape = x_t.shape
     #     predicted_noise = denoise_fn(x_t, self.t_transform(t), condition)
     #     predicted_x_0 = self.extract_coef_at_t(self.sqrt_recip_alphas_cumprod, t, shape) * x_t - \
@@ -78,7 +78,7 @@ class DDIM:
     #
     #     return predicted_x_0 * torch.sqrt(alpha_bar_next) + torch.sqrt(1 - alpha_bar_next) * new_predicted_noise
     #
-    # def ddim_encode_loop(self, denoise_fn, x_0, condition):
+    # def ddim_encode_loop(self, denoise_fn, x_0, condition=None):
     #     shape = x_0.shape
     #     batch_size = shape[0]
     #     x_t = x_0

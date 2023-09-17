@@ -1,11 +1,13 @@
 import os
 
-from torchvision import transforms
-from torch.utils.data import Dataset
-import torch
-import numpy as np
 from PIL import Image
-from utils import load_pickle
+import numpy as np
+
+import torch
+import torchvision.transforms as transforms
+from torch.utils.data import Dataset
+
+from utils.utils import load_pickle
 
 
 class my_transform:
@@ -34,10 +36,11 @@ class LFW(Dataset):
         self.ids = self.data[b'trainId' if self.train else b'testId']
 
         self.transform = transforms.Compose([
-            transforms.ToTensor(),  # 0 ~ 1
+            transforms.Resize((self.image_size, self.image_size)),
             transforms.RandomHorizontalFlip(),
+            transforms.ToTensor(),
             my_transform(),
-            transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5), inplace=True),  # -1 ~ 1
+            transforms.Normalize((0.5,), (0.5,), inplace=True),
         ])
 
         assert len(self.images) == len(self.attributes) == len(self.ids)
@@ -61,7 +64,6 @@ class LFW(Dataset):
             "index": index,
             "gt": gt,
             "x_0": image,
-            "x_T": torch.randn(self.image_channel, self.image_size, self.image_size),
             "condition": torch.from_numpy(attribute),
             "caption": str(self.ids[index])
         }
@@ -70,30 +72,25 @@ class LFW(Dataset):
     def collate_fn(batch):
         batch_size = len(batch)
 
-        indices = []
-        gts = []
+        idx = []
         x_0 = []
-        x_T = []
+        gt = []
         condition = []
         captions = []
         for i in range(batch_size):
-            indices.append(batch[i]["index"])
-            gts.append(batch[i]["gt"])
+            idx.append(batch[i]["index"])
             x_0.append(batch[i]["x_0"])
-            x_T.append(batch[i]["x_T"])
+            gt.append(batch[i]["gt"])
             condition.append(batch[i]["condition"])
             captions.append(batch[i]["caption"])
 
         x_0 = torch.stack(x_0, dim=0)
-        x_T = torch.stack(x_T, dim=0)
         condition = torch.stack(condition, dim=0)
 
         return {
-            "net_input": {
-                "x_0": x_0,
-                "x_T": x_T,
-                "condition": condition,
-            },
-            "gts": np.asarray(gts),
+            "idx": idx,
+            "x_0": x_0,
+            "gts": np.asarray(gt),
+            "condition": condition,
             "captions": [s["caption"] for s in batch]
         }

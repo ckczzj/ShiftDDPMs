@@ -10,8 +10,8 @@ class View(nn.Module):
         super().__init__()
         self.size = size
 
-    def forward(self, input):
-        return input.view(self.size)
+    def forward(self, x):
+        return x.view(self.size)
 
 def conv_nd(dims, *args, **kwargs):
     """
@@ -58,7 +58,7 @@ def normalization(channels):
     Make a standard normalization layer.
 
     :param channels: number of input channels.
-    :return: an nn.Module for normalization.
+    :return: a nn.Module for normalization.
     """
     return nn.GroupNorm(32, channels)
 
@@ -116,40 +116,22 @@ class AttentionPool2d(nn.Module):
 
 
 class TimestepBlock(nn.Module):
-    """
-    Any module where forward() takes timestep embeddings (and class) as a second argument.
-    """
-
     @abstractmethod
     def forward(self, x, emb):
         """
         Apply the module to `x` given `emb` timestep embeddings.
         """
 
-class TimestepZBlock(nn.Module):
-    """
-    Any module where forward() takes timestep embeddings (and class) as a second argument.
-    """
-
-    @abstractmethod
-    def forward(self, x, emb, emb_z):
-        """
-        Apply the module to `x` given `emb` timestep embeddings.
-        """
-
-
-class TimestepEmbedSequential(nn.Sequential, TimestepBlock):
+class TimestepSequential(nn.Sequential, TimestepBlock):
     """
     A sequential module that passes timestep embeddings to the children that
     support it as an extra input.
     """
 
-    def forward(self, x, emb, emb_z=None):
+    def forward(self, x, emb):
         for layer in self:
             if isinstance(layer, TimestepBlock):
                 x = layer(x, emb)
-            elif isinstance(layer, TimestepZBlock):
-                x = layer(x, emb, emb_z)
             else:
                 x = layer(x)
         return x
@@ -311,93 +293,6 @@ class ResBlock(TimestepBlock):
 
         return self.skip_connection(x) + h
 
-class ResBlockShift(TimestepZBlock):
-    def __init__(
-        self,
-        channels,
-        emb_channels,
-        dropout,
-        out_channels=None,
-        use_conv=False,
-        dims=2,
-        up=False,
-        down=False,
-    ):
-        super().__init__()
-        self.channels = channels
-        self.emb_channels = emb_channels
-        self.dropout = dropout
-        self.out_channels = out_channels or channels
-        self.use_conv = use_conv
-
-        self.in_layers = nn.Sequential(
-            normalization(channels),
-            nn.SiLU(),
-            conv_nd(dims, channels, self.out_channels, 3, padding=1),
-        )
-
-        self.updown = up or down
-
-        if up:
-            self.h_upd = Upsample(channels, False, dims)
-            self.x_upd = Upsample(channels, False, dims)
-        elif down:
-            self.h_upd = Downsample(channels, False, dims)
-            self.x_upd = Downsample(channels, False, dims)
-        else:
-            self.h_upd = self.x_upd = nn.Identity()
-
-        self.emb_layers = nn.Sequential(
-            nn.SiLU(),
-            linear(emb_channels, 2 * self.out_channels),
-        )
-        self.emb_z_layers = nn.Sequential(
-            nn.SiLU(),
-            linear(emb_channels, 2 * self.out_channels),
-        )
-        self.out_layers = nn.Sequential(
-            normalization(self.out_channels),
-            nn.SiLU(),
-            nn.Dropout(p=dropout),
-            zero_module(
-                conv_nd(dims, self.out_channels, self.out_channels, 3, padding=1)
-            ),
-        )
-
-        if self.out_channels == channels:
-            self.skip_connection = nn.Identity()
-        elif use_conv:
-            self.skip_connection = conv_nd(
-                dims, channels, self.out_channels, 3, padding=1
-            )
-        else:
-            self.skip_connection = conv_nd(dims, channels, self.out_channels, 1)
-
-    def forward(self, x, emb, emb_z):
-        if self.updown:
-            in_rest, in_conv = self.in_layers[:-1], self.in_layers[-1]
-            h = in_rest(x)
-            h = self.h_upd(h)
-            x = self.x_upd(x)
-            h = in_conv(h)
-        else:
-            h = self.in_layers(x)
-        emb_out = self.emb_layers(emb)
-        emb_z_out = self.emb_z_layers(emb_z)
-        while len(emb_out.shape) < len(h.shape):
-            emb_out = emb_out[..., None]
-        while len(emb_z_out.shape) < len(h.shape):
-            emb_z_out = emb_z_out[..., None]
-
-        # Adaptive Group Normalization
-        out_norm, out_rest = self.out_layers[0], self.out_layers[1:]
-        scale, shift = torch.chunk(emb_out, 2, dim=1)
-        z_scale, z_shift = torch.chunk(emb_z_out, 2, dim=1)
-        h = (1. + z_scale) * (out_norm(h) * (1. + scale) + shift) + z_shift
-        h = out_rest(h)
-
-        return self.skip_connection(x) + h
-
 
 class AttentionBlock(nn.Module):
     """
@@ -445,7 +340,7 @@ class AttentionBlock(nn.Module):
 
 class QKVAttentionLegacy(nn.Module):
     """
-    A module which performs QKV attention. Matches legacy QKVAttention + input/ouput heads shaping
+    A module which performs QKV attention. Matches legacy QKVAttention + input/output heads shaping
     """
 
     def __init__(self, n_heads):

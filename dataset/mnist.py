@@ -1,10 +1,11 @@
 import numpy as np
+
 import torch
 import torchvision
+import torchvision.transforms as transforms
 from torch.utils.data import Dataset
-from torchvision import transforms
 
-from utils import get_one_hot
+from utils.utils import get_one_hot
 
 class MNIST(Dataset):
     def __init__(self, config):
@@ -16,9 +17,9 @@ class MNIST(Dataset):
         self.train = self.config["train"]
 
         transform = transforms.Compose([
-            transforms.Resize(self.image_size),
-            transforms.ToTensor(),  # 0 ~ 1
-            transforms.Normalize((0.5,), (0.5,), inplace=True),  # -1 ~ 1
+            transforms.Resize((self.image_size, self.image_size)),
+            transforms.ToTensor(),
+            transforms.Normalize((0.5,), (0.5,), inplace=True),
         ])
 
         self.dataset = torchvision.datasets.MNIST(self.data_path, train=self.train, download=True, transform=transform)
@@ -34,7 +35,6 @@ class MNIST(Dataset):
             "index": index,
             "gt": gt,
             "x_0": image,
-            "x_T": torch.randn(self.image_channel, self.image_size, self.image_size),
             "label": torch.tensor(label),
             "caption": str(int(label))
         }
@@ -45,30 +45,25 @@ class MNIST(Dataset):
     def collate_fn(batch):
         batch_size = len(batch)
 
-        indices = []
-        gts = []
+        idx = []
+        gt = []
         x_0 = []
-        x_T = []
         label = []
         for i in range(batch_size):
-            indices.append(batch[i]["index"])
-            gts.append(batch[i]["gt"])
+            idx.append(batch[i]["index"])
             x_0.append(batch[i]["x_0"])
-            x_T.append(batch[i]["x_T"])
+            gt.append(batch[i]["gt"])
             label.append(batch[i]["label"])
 
         x_0 = torch.stack(x_0, dim=0)
-        x_T = torch.stack(x_T, dim=0)
         label = torch.stack(label, dim=0)
         condition = get_one_hot(label, 10)
 
         return {
-            "net_input": {
-                "x_0": x_0,
-                "x_T": x_T,
-                "condition": condition,
-            },
-            "gts": np.asarray(gts),
+            "idx": idx,
+            "x_0": x_0,
+            "gts": np.asarray(gt),
             "label": label,
+            "condition": condition,
             "captions": [s["caption"] for s in batch]
         }

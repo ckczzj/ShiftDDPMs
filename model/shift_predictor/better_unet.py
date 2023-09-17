@@ -4,7 +4,7 @@ import numpy as np
 import torch
 from torch import nn
 
-from .stylegan2.ops import upfirdn2d
+from model.shift_predictor.stylegan2.ops import upfirdn2d
 
 
 @torch.no_grad()

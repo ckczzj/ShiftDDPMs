@@ -1,6 +1,6 @@
 import torch.nn as nn
 
-from .better_unet import BetterUnet
+from model.shift_predictor.better_unet import BetterUnet
 
 class LSUNCHURCHShiftPredictor(nn.Module):
     def __init__(self, config):

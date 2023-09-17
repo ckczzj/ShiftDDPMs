@@ -21,14 +21,21 @@ You should put download under **ShiftDDPMs/data/** and unzip them.
 
 
 
+## Install Requirements
+
+```
+pip install -r requirements.txt
+```
+
+
+
 
 ## Training
 
 To train regular DDPM, run this command:
 
 ```
-cd ./trainer
-CUDA_VISIBLE_DEVICES=0,1,2,3 python3 train_regular.py --world_size 4
+bash scripts/dist_train_regular_diffusion.sh 1 0 4
 ```
 
 
@@ -36,13 +43,12 @@ CUDA_VISIBLE_DEVICES=0,1,2,3 python3 train_regular.py --world_size 4
 To train ShiftDDPM, run this command:
 
 ```
-cd ./trainer
-CUDA_VISIBLE_DEVICES=0,1,2,3 python3 train_shift.py --world_size 4
+bash scripts/dist_train_shift_diffusion.sh 1 0 4
 ```
 
 
 
-You can change the config file and run path in the python file.
+You can change the config file and run path in the script file.
 
 
 

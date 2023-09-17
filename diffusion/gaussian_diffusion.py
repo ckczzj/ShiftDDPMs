@@ -1,10 +1,11 @@
+import math
 import torch
 import numpy as np
 
 from functools import partial
 from tqdm import tqdm
 
-from .ddim import DDIM
+from diffusion.ddim import DDIM
 
 
 class GaussianDiffusion:
@@ -14,7 +15,16 @@ class GaussianDiffusion:
         self.timesteps = config["timesteps"]
         betas_type = config["betas_type"]
         if betas_type == "linear":
-            betas = np.linspace(config["linear_beta_start"], config["linear_beta_end"], self.timesteps)
+            betas = np.linspace(0.0001, 0.02, self.timesteps)
+        elif betas_type == "cosine":
+            betas = []
+            alpha_bar = lambda t: math.cos((t + 0.008) / 1.008 * math.pi / 2) ** 2
+            max_beta = 0.999
+            for i in range(self.timesteps):
+                t1 = i / self.timesteps
+                t2 = (i + 1) / self.timesteps
+                betas.append(min(1 - alpha_bar(t2) / alpha_bar(t1), max_beta))
+            betas = np.array(betas)
         else:
             raise NotImplementedError
 
@@ -62,10 +72,10 @@ class GaussianDiffusion:
             elif self.shift_type == "data_normalization":
                 shift = - np.sqrt(alphas_cumprod)
             elif self.shift_type == "quadratic_shift":
+                shift = np.sqrt(alphas_cumprod) * (1. - np.sqrt(alphas_cumprod))
                 # def quadratic(timesteps, t):
                 #     return - (1.0 / (timesteps / 2.0) ** 2) * (t - timesteps) * t
                 # shift = np.array([quadratic(self.timesteps, i + 1) for i in range(1000)])
-                shift = np.sqrt(alphas_cumprod) * (1. - np.sqrt(alphas_cumprod))
             elif self.shift_type == "early":
                 shift = np.array([(i + 1) / 600 - 2. / 3. for i in range(1000)])
                 shift[:400] = 0
@@ -85,8 +95,11 @@ class GaussianDiffusion:
     @staticmethod
     def get_ddim_betas_and_timestep_map(ddim_style, original_alphas_cumprod):
         original_timesteps = original_alphas_cumprod.shape[0]
-        dim_step = int(ddim_style[len("ddim"):])
-        use_timesteps = set([int(s) for s in list(np.linspace(0, original_timesteps - 1, dim_step + 1))])
+        ddim_step = int(ddim_style[len("ddim"):])
+        # data: x_{-1}  noisy latents: x_{0}, x_{1}, x_{2}, ..., x_{T-2}, x_{T-1}
+        # encode: treat input x_{-1} as starting point x_{0}
+        # sample: treat ending point x_{0} as output x_{-1}
+        use_timesteps = set([int(s) for s in list(np.linspace(0, original_timesteps - 1, ddim_step + 1))])
         timestep_map = []
 
         last_alpha_cumprod = 1.0

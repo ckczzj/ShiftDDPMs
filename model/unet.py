@@ -1,4 +1,4 @@
-from ..module import *
+from model.module import *
 
 class UNet(nn.Module):
     """
@@ -51,21 +51,11 @@ class UNet(nn.Module):
         )
 
         if self.num_class is not None:
-            # original class label
-            # self.label_emb = nn.Embedding(num_class, time_embed_dim)
-
-            # free
-            # self.label_emb = nn.Linear(num_class, time_embed_dim)
-
-            self.label_emb = nn.Sequential(
-                nn.Linear(num_class, time_embed_dim),
-                nn.SiLU(),
-                nn.Linear(time_embed_dim, time_embed_dim),
-            )
+            self.label_emb = nn.Embedding(num_class, time_embed_dim)
 
         ch = input_ch = int(channel_multiplier[0] * base_channel)
         self.input_blocks = nn.ModuleList(
-            [TimestepEmbedSequential(conv_nd(dims, input_channel, ch, 3, padding=1))]
+            [TimestepSequential(conv_nd(dims, input_channel, ch, 3, padding=1))]
         )
         self._feature_size = ch
         input_block_chans = [ch]
@@ -91,13 +81,13 @@ class UNet(nn.Module):
                             use_new_attention_order=use_new_attention_order
                         )
                     )
-                self.input_blocks.append(TimestepEmbedSequential(*layers))
+                self.input_blocks.append(TimestepSequential(*layers))
                 self._feature_size += ch
                 input_block_chans.append(ch)
             if level != len(channel_multiplier) - 1:
                 out_ch = ch
                 self.input_blocks.append(
-                    TimestepEmbedSequential(
+                    TimestepSequential(
                         ResBlock(
                             ch,
                             time_embed_dim,
@@ -113,7 +103,7 @@ class UNet(nn.Module):
                 ds *= 2
                 self._feature_size += ch
 
-        self.middle_block = TimestepEmbedSequential(
+        self.middle_block = TimestepSequential(
             ResBlock(
                 ch,
                 time_embed_dim,
@@ -171,7 +161,7 @@ class UNet(nn.Module):
                         )
                     )
                     ds //= 2
-                self.output_blocks.append(TimestepEmbedSequential(*layers))
+                self.output_blocks.append(TimestepSequential(*layers))
                 self._feature_size += ch
 
         self.out = nn.Sequential(
@@ -180,11 +170,11 @@ class UNet(nn.Module):
             zero_module(conv_nd(dims, input_ch, output_channel, 3, padding=1)),
         )
 
-    def forward(self, input, time, condition=None):
+    def forward(self, x, time, condition=None):
         """
         Apply the model to an input batch.
 
-        :param input: an [N x C x ...] Tensor of inputs.
+        :param x: an [N x C x ...] Tensor of inputs.
         :param time: a 1-D batch of timesteps.
         :param condition: an [N] Tensor of labels, if class-conditional.
         :return: an [N x C x ...] Tensor of outputs.
@@ -194,10 +184,10 @@ class UNet(nn.Module):
         emb = self.time_embed(timestep_embedding(time, self.base_channel))
 
         if self.num_class is not None:
-            # assert condition.shape == (input.shape[0],)
+            assert condition is not None
             emb = emb + self.label_emb(condition)
 
-        h = input
+        h = x
         for module in self.input_blocks:
             h = module(h, emb)
             hs.append(h)

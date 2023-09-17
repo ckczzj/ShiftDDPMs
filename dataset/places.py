@@ -2,12 +2,13 @@ import os
 import random
 
 import cv2
+from PIL import Image
 import numpy as np
+
 import torch
 import torchvision
 import torchvision.transforms as transforms
 import torchvision.transforms.functional as F
-from PIL import Image
 from torch.utils.data import Dataset
 
 """Rotate by one of the given angles."""
@@ -29,12 +30,19 @@ class PLACES(Dataset):
         self.image_size = self.config["image_size"]
         self.train = self.config["train"]
 
-        self.transform = transforms.Compose([
-            transforms.Resize((self.image_size, self.image_size)),
-            transforms.RandomHorizontalFlip(),
-            transforms.ToTensor(),
-            transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
-        ])
+        if self.train:
+            self.transform = transforms.Compose([
+                transforms.Resize((self.image_size, self.image_size)),
+                transforms.RandomHorizontalFlip(),
+                transforms.ToTensor(),
+                transforms.Normalize((0.5,), (0.5,), inplace=True)
+            ])
+        else:
+            self.transform = transforms.Compose([
+                transforms.Resize((self.image_size, self.image_size)),
+                transforms.ToTensor(),
+                transforms.Normalize((0.5,), (0.5,), inplace=True)
+            ])
 
 
         self.images = torchvision.datasets.ImageFolder(
@@ -93,9 +101,8 @@ class PLACES(Dataset):
 
         return {
             "idx": index,
-            "gt": gt,
             "x_0": image,
-            "x_T": torch.randn(self.image_channel, self.image_size, self.image_size),
+            "gt": gt,
             "mask": selected_mask,  # 1 x image_size x image_size
             "condition": image * ( - selected_mask + 1.),  # 3 x image_size x image_size
             "masked_gt": masked_gt,  # image_size x image_size x image_channel
@@ -106,34 +113,28 @@ class PLACES(Dataset):
         batch_size = len(batch)
 
         idx = []
-        gts = []
         x_0 = []
-        x_T = []
+        gt = []
         mask = []
         condition = []
         masked_gt = []
         for i in range(batch_size):
             idx.append(batch[i]["idx"])
-            gts.append(batch[i]["gt"])
             x_0.append(batch[i]["x_0"])
-            x_T.append(batch[i]["x_T"])
+            gt.append(batch[i]["gt"])
             mask.append(batch[i]["mask"])
             condition.append(batch[i]["condition"])
             masked_gt.append(batch[i]["masked_gt"])
 
         x_0 = torch.stack(x_0, dim=0)
-        x_T = torch.stack(x_T, dim=0)
         mask = torch.stack(mask, dim=0)
         condition = torch.stack(condition, dim=0)
 
         return {
-            "net_input": {
-                "x_0": x_0,
-                "x_T": x_T,
-                "mask": mask,
-                "condition": condition,
-            },
             "idx": idx,
-            "gts": np.asarray(gts),
+            "x_0": x_0,
+            "gts": np.asarray(gt),
+            "mask": mask,
+            "condition": condition,
             "masked_gts": np.array(masked_gt),
         }
