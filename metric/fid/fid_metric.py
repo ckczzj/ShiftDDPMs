@@ -89,7 +89,7 @@ class FIDMetric:
         self.target_path = target_path
         self.results = []
 
-    def save_images(self, images, image_ids, normalize_input):
+    def save_images(self, images, normalize_input, image_ids):
         print("Saving to target path.")
         for idx, image in enumerate(images):
             pil_img = tensor_to_pillow(image, normalize_input)
@@ -102,7 +102,7 @@ class FIDMetric:
     def process(self, samples, normalize_input, image_ids=None):
         if self.img_save_path is not None:
             assert image_ids is not None, "image_ids must be provided to save images."
-            self.save_images(samples, image_ids, normalize_input)
+            self.save_images(samples, normalize_input, image_ids)
 
         samples = numerical_rescale(samples, normalize_input)
         with torch.no_grad():
