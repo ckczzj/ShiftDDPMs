@@ -48,7 +48,7 @@ class Sampler(BaseSampler):
                 if self.global_rank == 0:
                     print(batch_id)
                 x_0 = batch["x_0"]
-                self.fid_metric.process(x_0.to(self.device), None)
+                self.fid_metric.process(x_0.to(self.device), None, normalize_input=True)
 
         fid_results = self.fid_metric.all_gather_results(self.global_world_size)
         if self.global_rank == 0:
