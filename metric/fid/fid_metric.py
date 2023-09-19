@@ -77,12 +77,12 @@ def calculate_frechet_distance(mu1, sigma1, mu2, sigma2, eps=1e-6):
 
     return diff.dot(diff) + np.trace(sigma1) + np.trace(sigma2) - 2 * tr_covmean
 
-# process image tensor (b x c x h x w) in range (0., 1.)
+# process image tensor (b x c x h x w) in range (-1., 1.)
 class FIDMetric:
     def __init__(self, dims, inception_path, device, target_path = None, img_save_path = None):
         super().__init__()
         block_idx = InceptionV3.BLOCK_INDEX_BY_DIM[dims]
-        self.inception = InceptionV3([block_idx], inception_path=inception_path).to(device)
+        self.inception = InceptionV3([block_idx], normalize_input=False, inception_path=inception_path).to(device)
         self.inception.eval()
         self.device = device
         self.img_save_path = img_save_path
@@ -99,7 +99,7 @@ class FIDMetric:
             pil_img.save(f'{self.img_save_path}/image_{image_ids[idx]}_{sub_idx}.png')
 
     # b x c x h x w
-    def process(self, samples, image_ids=None, normalize_input=True):
+    def process(self, samples, image_ids=None, normalize_input=False):
         if self.img_save_path is not None:
             assert image_ids is not None, "image_ids must be provided to save images."
             self.save_images(samples, image_ids, normalize_input)
