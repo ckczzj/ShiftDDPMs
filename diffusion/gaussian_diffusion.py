@@ -190,6 +190,20 @@ class GaussianDiffusion:
             raise NotImplementedError()
 
     """
+        test pretrained dpms
+    """
+    def test_pretrained_dpms(self, ddim_style, denoise_fn, x_T, condition=None):
+        return self.ddim_sample(ddim_style, denoise_fn, x_T, condition)
+
+    """
+        ddim
+    """
+    def ddim_sample(self, ddim_style, denoise_fn, x_T, condition=None):
+        new_betas, timestep_map = self.get_ddim_betas_and_timestep_map(ddim_style, self.alphas_cumprod.cpu().numpy())
+        ddim = DDIM(new_betas, timestep_map, self.device)
+        return ddim.ddim_sample_loop(denoise_fn, x_T, condition)
+
+    """
         regular
     """
     def regular_train_one_batch(self, denoise_fn, x_0, condition=None):
@@ -217,9 +231,7 @@ class GaussianDiffusion:
         return img
 
     def regular_ddim_sample(self, ddim_style, denoise_fn, x_T, condition=None):
-        new_betas, timestep_map = self.get_ddim_betas_and_timestep_map(ddim_style, self.alphas_cumprod.cpu().numpy())
-        ddim = DDIM(new_betas, timestep_map, self.device)
-        return ddim.ddim_sample_loop(denoise_fn, x_T, condition)
+        return self.ddim_sample(ddim_style, denoise_fn, x_T, condition)
 
     """
         shift
