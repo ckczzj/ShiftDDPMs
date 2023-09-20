@@ -9,15 +9,18 @@ from torch.nn.functional import adaptive_avg_pool2d
 
 from metric.fid.inception import InceptionV3
 
-def numerical_rescale(x, normalize_input):
-    if normalize_input:
-        res = (x + 1.) / 2.
+def numerical_rescale(x, is_0_1, to_0_1):
+    if is_0_1 and to_0_1:
+        return x.clamp(0., 1.).to(torch.float32)
+    elif is_0_1 and not to_0_1:
+        return ((x - 0.5) * 2.).clamp(-1., 1.).to(torch.float32)
+    elif not is_0_1 and to_0_1:
+        return ((x + 1.) / 2.).clamp(0., 1.).to(torch.float32)
     else:
-        res = x
-    return res.clamp(0., 1.).to(torch.float32)
+        return x.clamp(-1., 1.).to(torch.float32)
 
-def tensor_to_pillow(x, normalize_input):
-    if normalize_input:
+def tensor_to_pillow(x, is_0_1):
+    if not is_0_1:
         x = (x + 1.) / 2.
     x = x.mul(255).add(0.5).clamp(0, 255)
     x = x.permute(1, 2, 0).to('cpu', torch.uint8).numpy()
@@ -77,34 +80,43 @@ def calculate_frechet_distance(mu1, sigma1, mu2, sigma2, eps=1e-6):
 
     return diff.dot(diff) + np.trace(sigma1) + np.trace(sigma2) - 2 * tr_covmean
 
-# process image tensor (b x c x h x w) in range (-1., 1.)
+# if your input to inception network is in range (-1., 1.), use normalize_input=False
+# else use normalize_input=True
 class FIDMetric:
-    def __init__(self, dims, inception_path, device, target_path = None, img_save_path = None):
+    def __init__(self, dims, inception_path, normalize_input, device, target_path = None, img_save_path = None):
         super().__init__()
         block_idx = InceptionV3.BLOCK_INDEX_BY_DIM[dims]
-        self.inception = InceptionV3([block_idx], normalize_input=False, inception_path=inception_path).to(device)
+        self.inception = InceptionV3(
+            resize_input=True,
+            normalize_input=normalize_input, # whether to scale input from range (0, 1) to range (-1, 1)
+            output_blocks= [block_idx],
+            inception_path=inception_path
+        ).to(device)
         self.inception.eval()
         self.device = device
-        self.img_save_path = img_save_path
+        self.normalize_input = normalize_input
         self.target_path = target_path
+        self.img_save_path = img_save_path
         self.results = []
 
-    def save_images(self, images, image_ids, normalize_input):
-        print("Saving to target path.")
+    def save_images(self, images, image_ids, is_0_1):
+        print("saving images")
+
         for idx, image in enumerate(images):
-            pil_img = tensor_to_pillow(image, normalize_input)
+            pil_img = tensor_to_pillow(image, is_0_1)
             sub_idx = 0
             while os.path.exists(f'{self.img_save_path}/image_{image_ids[idx]}_{sub_idx}.png'):
                 sub_idx += 1
             pil_img.save(f'{self.img_save_path}/image_{image_ids[idx]}_{sub_idx}.png')
 
     # b x c x h x w
-    def process(self, samples, image_ids=None, normalize_input=False):
+    def process(self, samples, image_ids=None, is_0_1=False):
         if self.img_save_path is not None:
             assert image_ids is not None, "image_ids must be provided to save images."
-            self.save_images(samples, image_ids, normalize_input)
+            os.makedirs(self.img_save_path, exist_ok=True)
+            self.save_images(samples, image_ids, is_0_1=is_0_1)
 
-        samples = numerical_rescale(samples, normalize_input)
+        samples = numerical_rescale(samples, is_0_1=is_0_1, to_0_1=self.normalize_input)
         with torch.no_grad():
             # b x 2048 x 1 x 1
             prediction = self.inception(samples)[0]

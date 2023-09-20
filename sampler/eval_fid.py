@@ -37,9 +37,10 @@ class Sampler(BaseSampler):
         self.fid_metric = FIDMetric(
             dims=2048,
             inception_path=self.config["inception_path"],
+            normalize_input=self.config["normalize_input"],
             device=self.device,
             target_path=self.config["target_path"],
-            img_save_path=None,
+            img_save_path=self.config["img_save_path"],
         )
 
     def start(self):
@@ -48,7 +49,8 @@ class Sampler(BaseSampler):
                 if self.global_rank == 0:
                     print(batch_id)
                 x_0 = batch["x_0"]
-                self.fid_metric.process(x_0.to(self.device), None, normalize_input=False)
+                idx = batch["idx"]
+                self.fid_metric.process(x_0.to(self.device), image_ids=idx, is_0_1=False)
 
         fid_results = self.fid_metric.all_gather_results(self.global_world_size)
         if self.global_rank == 0:
@@ -63,6 +65,9 @@ if __name__ == '__main__':
     args.config = {
         "inception_path": "./misc/pt_inception-2015-12-05-6726825d.pth",
         "target_path": "./misc/cifar10_val_fid_stats.pt",
+        # "img_save_path": "./misc/cifar10/",
+        "img_save_path": None,
+        "normalize_input": False,
 
         "dataset_config": {
             "dataset_name": "CIFAR",

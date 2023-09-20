@@ -29,9 +29,9 @@ class InceptionV3(nn.Module):
     }
 
     def __init__(self,
+                 resize_input,
+                 normalize_input,
                  output_blocks=(DEFAULT_BLOCK_INDEX,),
-                 resize_input=True,
-                 normalize_input=True,
                  requires_grad=False,
                  use_fid_inception=True,
                  inception_path=""):
