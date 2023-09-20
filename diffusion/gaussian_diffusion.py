@@ -187,7 +187,7 @@ class GaussianDiffusion:
             else:
                 return torch.mean((noise - predicted_noise) ** 2)
         else:
-            raise NotImplementedError()
+            raise NotImplementedError
 
     """
         test pretrained dpms

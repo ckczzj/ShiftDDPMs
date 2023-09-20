@@ -1,31 +1,14 @@
 import os
 
-from PIL import Image
 import numpy as np
 from scipy import linalg
 
 import torch
 from torch.nn.functional import adaptive_avg_pool2d
 
+from metric.base_metric import BaseMetric
 from metric.fid.inception import InceptionV3
-
-def numerical_rescale(x, is_0_1, to_0_1):
-    if is_0_1 and to_0_1:
-        return x.clamp(0., 1.).to(torch.float32)
-    elif is_0_1 and not to_0_1:
-        return ((x - 0.5) * 2.).clamp(-1., 1.).to(torch.float32)
-    elif not is_0_1 and to_0_1:
-        return ((x + 1.) / 2.).clamp(0., 1.).to(torch.float32)
-    else:
-        return x.clamp(-1., 1.).to(torch.float32)
-
-def tensor_to_pillow(x, is_0_1):
-    if not is_0_1:
-        x = (x + 1.) / 2.
-    x = x.mul(255).add(0.5).clamp(0, 255)
-    x = x.permute(1, 2, 0).to('cpu', torch.uint8).numpy()
-    return Image.fromarray(x)
-
+from metric.utils import numerical_rescale, tensor_to_pillow
 
 def calculate_frechet_distance(mu1, sigma1, mu2, sigma2, eps=1e-6):
     """Numpy implementation of the Frechet Distance.
@@ -82,7 +65,7 @@ def calculate_frechet_distance(mu1, sigma1, mu2, sigma2, eps=1e-6):
 
 # if your input to inception network is in range (-1., 1.), use normalize_input=False
 # else use normalize_input=True
-class FIDMetric:
+class FIDMetric(BaseMetric):
     def __init__(self, dims, inception_path, normalize_input, device, target_path = None, img_save_path = None):
         super().__init__()
         block_idx = InceptionV3.BLOCK_INDEX_BY_DIM[dims]
@@ -97,7 +80,6 @@ class FIDMetric:
         self.normalize_input = normalize_input
         self.target_path = target_path
         self.img_save_path = img_save_path
-        self.results = []
 
     def save_images(self, images, image_ids, is_0_1):
         print("saving images")
@@ -126,14 +108,6 @@ class FIDMetric:
         prediction = prediction.flatten(1, 3).cpu().numpy()
         self.results.append(prediction)
 
-    def all_gather_results(self, world_size):
-        gather_results_list = [None for _ in range(world_size)]
-        torch.distributed.all_gather_object(gather_results_list, self.results)
-        gather_results = []
-        for results in gather_results_list:
-            gather_results.extend(results)
-        return gather_results
-
     def compute_metrics(self, results):
         # n x 2048
         predictions = np.concatenate(results, axis=0)
@@ -150,6 +124,3 @@ class FIDMetric:
         print(predictions.shape)
         mu, sigma = np.mean(predictions, axis=0), np.cov(predictions, rowvar=False)
         return mu, sigma # mu: np.float32, sigma: np.float64
-
-    def reset(self):
-        self.results = []
